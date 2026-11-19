@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block stage_visual %}
+<div class="entry"><span>期间状态</span><b>{{ periods|length }} 个期间</b></div>
+{% for p in periods[:5] %}
+<div class="entry {{ 'diff' if p.status=='已关账' else '' }}"><span>{{ p.period }}</span><b>{{ p.status }}<br><small>r{{ p.revision }}</small></b></div>
+{% endfor %}
+{% if not periods %}<small>尚无期间登记，提交调整单时自动创建。</small>{% endif %}
+{% endblock %}
+
+{% block detail_table %}
+{% if not batch %}
+<div class="empty">
+  <p>期后调整用于承接<strong>关账后</strong>补来的登记/到账记录。旧批次数据冻结不改写，晚到记录以调整分录入账到当前开放期间。</p>
+  <form id="adjust-form" class="adjust-form">
+    <label>来源批次（已复核通过）<input name="source_run_id" placeholder="run_id" required></label>
+    <label>调整期间<input name="adjust_period" placeholder="YYYY-MM" required></label>
+    <label>晚到记录 CSV（同既有表头，position 行）<textarea name="csv" rows="8" required></textarea></label>
+    <div class="actions"><button type="submit" class="primary">提交调整单</button></div>
+  </form>
+  <div id="error" class="error" role="status"></div>
+  <h3>调整单列表</h3>
+  <table><thead><tr><th>调整单</th><th>来源批次</th><th>原期间</th><th>调整期间</th><th>状态</th><th>版本</th></tr></thead><tbody>
+  {% for b in batches %}<tr><td><a href="/work/8?adjustment={{b.id}}">{{b.id[:12]}}</a></td><td>{{b.source_run_id[:12]}}</td><td>{{b.origin_period}}</td><td>{{b.adjust_period}}</td><td>{{b.decision}}</td><td>r{{b.revision}}</td></tr>
+  {% else %}<tr><td colspan="6" class="empty">暂无调整单。</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+{% else %}
+<div class="adjust-view">
+  <div class="adjust-head">
+    <h3>调整单 {{ batch.id }} <span class="badge">{{ batch.decision }} r{{ batch.revision }}</span></h3>
+    <p>来源批次 <a href="/work/7?run_id={{ batch.source_run_id }}">{{ batch.source_run_id }}</a>
+       （{{ batch.source_decision }} r{{ batch.source_revision }}，冻结依据）｜
+       原期间 <b>{{ batch.origin_period }}</b> → 调整期间 <b>{{ batch.adjust_period }}</b> ｜
+       规则 {{ batch.rule_version }}</p>
+    <a class="btn" href="/api/adjustments/{{ batch.id }}/evidence.csv">调整证据CSV</a>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><span>调整分录</span><b>{{ batch.summary.entries }} 条</b></div>
+    <div class="kpi"><span>隔离</span><b>{{ batch.summary.quarantined }} 条</b></div>
+    <div class="kpi"><span>两期股份差合计</span><b>{{ batch.summary.share_delta_total|display }} 股</b></div>
+    <div class="kpi"><span>两期现金差合计</span><b>{{ batch.summary.cash_delta_total|display }} CNY</b></div>
+    <div class="kpi"><span>类型</span><b style="font-size:12px">{{ batch.summary.types|join(' / ') }}</b></div>
+  </div>
+  <table>
+    <thead><tr><th>记录</th><th>证券</th><th>快照日</th><th>类型</th><th>原期间</th><th>调整期间</th><th>原股份</th><th>调整后股份</th><th>股份差</th><th>原现金</th><th>调整现金</th><th>现金差</th><th>依据行号</th><th>幂等键</th></tr></thead>
+    <tbody>
+    {% for e in batch.entries %}
+    <tr class="{{ 'diff' if e.entry_type!='无差异' else '' }}">
+      <td>{{ e.record_id }}</td><td>{{ e.security }}</td><td>{{ e.event_date }}</td><td>{{ e.entry_type }}</td>
+      <td>{{ e.origin_period }}</td><td>{{ e.adjust_period }}</td>
+      <td>{{ e.origin_shares|display }}</td><td>{{ e.adjusted_shares|display }}</td><td>{{ e.share_delta|display }}</td>
+      <td>{{ e.origin_cash|display }}</td><td>{{ e.adjusted_cash|display }}</td><td>{{ e.cash_delta|display }}</td>
+      <td>{{ e.source_line }}</td><td title="{{ e.idem_key }}">{{ e.idem_key[:10] }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if batch.quarantine %}
+  <h3>隔离记录（不入账，留痕）</h3>
+  <table><thead><tr><th>行号</th><th>记录</th><th>原因码</th><th>原因</th></tr></thead><tbody>
+  {% for q in batch.quarantine %}<tr><td>{{ q.get('行号','—') }}</td><td>{{ q.get('record','—') }}</td><td class="sev--severe">{{ q.原因码 }}</td><td>{{ q.原因 }}</td></tr>{% endfor %}
+  </tbody></table>
+  {% endif %}
+  <div class="actions">
+    <button data-adjust-check="通过" {% if batch.decision=='通过' %}disabled{% endif %}>通过并生效</button>
+    <button data-adjust-check="退回" {% if batch.decision=='通过' %}disabled{% endif %}>退回</button>
+    <a class="btn" href="/work/8">返回列表</a>
+  </div>
+  <script type="application/json" id="adjust-run">{{ {'id':batch.id,'revision':batch.revision}|tojson }}</script>
+</div>
+{% endif %}
+{% endblock %}

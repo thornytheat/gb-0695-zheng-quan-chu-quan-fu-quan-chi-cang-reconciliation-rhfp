@@ -13,6 +13,8 @@ from app.modules.m4_factors.handler import bp as bp4
 from app.modules.m5_holdings.handler import bp as bp5
 from app.modules.m6_cash.handler import bp as bp6
 from app.modules.m7_revisions.handler import bp as bp7
+from app.modules.m8_adjustments.handler import bp as bp8
+from app import adjust_store
 app=Flask(__name__)
 app.config['MAX_CONTENT_LENGTH']=5*1024*1024
 app.json.ensure_ascii=False
@@ -32,11 +34,12 @@ app.register_blueprint(bp4)
 app.register_blueprint(bp5)
 app.register_blueprint(bp6)
 app.register_blueprint(bp7)
+app.register_blueprint(bp8)
 @app.before_request
 def validate_request_object():
     if request.method!='POST': return None
     if request.files:
-        if request.path!='/api/run' or 'file' not in request.files:
+        if request.path not in ('/api/run','/api/adjustments') or 'file' not in request.files:
             raise DomainError('REQUEST','上传必须使用file字段',400)
         return None
     if not request.is_json:
@@ -77,4 +80,18 @@ def evidence():
     writer=csv.DictWriter(out,fieldnames=fields);writer.writeheader()
     for row in rows: writer.writerow({'run_id':result['manifest']['run_id'],'规则版本':result['manifest']['rule_version'],**row})
     return Response('\ufeff'+out.getvalue(),mimetype='text/csv',headers={'Content-Disposition':'attachment; filename=evidence.csv'})
+@app.route('/api/adjustments/<batch_id>/evidence.csv')
+def adjustment_evidence(batch_id):
+    from app.modules.m8_adjustments.service import detail
+    batch=detail(batch_id)
+    out=io.StringIO(newline='')
+    rows=list(batch['entries'])+[{'record_id':q.get('record','\u2014'),'\u539f\u56e0\u7801':q['\u539f\u56e0\u7801'],'\u539f\u56e0':q['\u539f\u56e0'],
+                                  'source_line':q.get('\u884c\u53f7')} for q in batch.get('quarantine',[])]
+    fields=list(dict.fromkeys(['\u8c03\u6574\u5355','\u6765\u6e90\u6279\u6b21','\u539f\u671f\u95f4','\u8c03\u6574\u671f\u95f4']+[k for r in rows for k in r]))
+    writer=csv.DictWriter(out,fieldnames=fields);writer.writeheader()
+    for row in rows:
+        writer.writerow({'\u8c03\u6574\u5355':batch['id'],'\u6765\u6e90\u6279\u6b21':batch['source_run_id'],
+                         '\u539f\u671f\u95f4':row.get('origin_period',''),'\u8c03\u6574\u671f\u95f4':row.get('adjust_period',''),**row})
+    return Response('\ufeff'+out.getvalue(),mimetype='text/csv',
+                    headers={'Content-Disposition':f'attachment; filename=adjustment-{batch_id}.csv'})
 if __name__=='__main__': app.run(host='0.0.0.0',port=8000)

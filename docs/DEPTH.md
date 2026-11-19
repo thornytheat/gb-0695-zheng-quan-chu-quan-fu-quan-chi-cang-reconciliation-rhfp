@@ -15,6 +15,7 @@
 | M5 持仓重算 | 运行持仓重算并复核证据 | `POST /api/m5`；`/work/5` | `app/modules/m5_holdings/rules.py` | `tests/test_m5.py` |
 | M6 现金对账 | 运行现金对账并复核证据 | `POST /api/m6`；`/work/6` | `app/modules/m6_cash/rules.py` | `tests/test_m6.py` |
 | M7 修订回放 | 运行修订回放并复核证据 | `POST /api/m7`；`/work/7` | `app/modules/m7_revisions/rules.py` | `tests/test_m7.py` |
+| M8 期后调整 | 关账后补录走调整单，复核两期差异 | `POST /api/adjustments`；`/work/8` | `app/modules/m8_adjustments/rules.py`、`app/adjust_store.py` | `tests/test_m8.py` |
 
 ## 陷阱登记
 
@@ -28,6 +29,7 @@
 | TRAP-14 | 行动定义冲突 | 静默覆盖或误计 | 显式裁决并保留证据 | `app/modules/m2_mapping/rules.py` | `tests/test_m2.py::test_conflicting_action_removed` |
 | TRAP-24 | 现金尾差 | 静默覆盖或误计 | 显式裁决并保留证据 | `app/modules/m5_holdings/rules.py` | `tests/test_m5.py::test_largest_remainder_conservation` |
 | TRAP-25 | 行动版本选择 | 静默覆盖或误计 | 显式裁决并保留证据 | `app/modules/m2_mapping/rules.py` | `tests/test_m2.py::test_latest_action_chosen` |
+| TRAP-31 | 关账后晚到记录 | 塞回已关账批次改写已发布数，或计入当期两期重复派发 | 旧批次冻结，晚到记录以调整分录入账开放期间；幂等键全局唯一，原期间/调整期间/两期差异可复核 | `app/adjust_store.py`、`app/modules/m8_adjustments/rules.py` | `tests/test_m8.py` |
 
 ## 对账规则
 
